@@ -21,6 +21,10 @@ var view;
 
 var outdir = path.normalize(env.opts.destination);
 
+
+helper.addMemberDefinition('reference', {kind: 'reference'});
+
+
 function find(spec) {
     return helper.find(data, spec);
 }
@@ -297,6 +301,15 @@ function buildMemberNav(items, itemHeading, itemsSeen, linktoFn) {
             var methods = find({kind:'function', memberof: item.longname});
             var members = find({kind:'member', memberof: item.longname});
             var docdash = env && env.conf && env.conf.docdash || {};
+			var methodCategories={
+				"none":[]
+			};
+			var methodCategoryOrder=["none"];
+			var memberCategories={
+				"none":[]
+			};
+			var memberCategoryOrder=["none"];
+			var tmpString="";
 
             if ( !hasOwnProp.call(item, 'longname') ) {
                 itemsNav += '<li>' + linktoFn('', item.name);
@@ -305,28 +318,79 @@ function buildMemberNav(items, itemHeading, itemsSeen, linktoFn) {
                 itemsNav += '<li>' + linktoFn(item.longname, item.name.replace(/^module:/, ''));
 
                 if (docdash.static && members.find(function (m) { return m.scope === 'static'; } )) {
+					itemsNav+="<h4>Static</h4>";
                     itemsNav += "<ul class='members'>";
-
+					
                     members.forEach(function (member) {
-                        if (!member.scope === 'static') return;
-                        itemsNav += "<li data-type='member'>";
-                        itemsNav += linkto(member.longname, member.name);
-                        itemsNav += "</li>";
+						if (!member.scope === 'static') return;
+						tmpString="";
+						tmpString += "<li data-type='member'>";
+                        tmpString += linkto(member.longname, member.name);
+                        tmpString += "</li>";
+						if(member.category){
+							if(!memberCategories[member.category]){
+								memberCategories[member.category]=[];
+								memberCategoryOrder.push(member.category);
+							}
+							memberCategories[member.category].push(tmpString);
+						}
+						else{
+							memberCategories.none.push(tmpString);
+						}						
                     });
+					memberCategoryOrder.forEach(function(cat){
+						if(cat=="none"){
+							itemsNav += memberCategories.none.join(' ');
+						}
+						else{
+							itemsNav += '<li>';
+							itemsNav += "<h5>"+cat+"</h5>";
+							itemsNav += "<ul>";
+							itemsNav += memberCategories[cat].join(' ');
+							itemsNav += "</ul>";
+							itemsNav += '</li>';
+						}
+						
+					});
 
                     itemsNav += "</ul>";
                 }
 
                 if (methods.length) {
+					itemsNav+="<h4>Methods</h4>";
                     itemsNav += "<ul class='methods'>";
 
                     methods.forEach(function (method) {
-                        itemsNav += "<li data-type='method'>";
-                        itemsNav += linkto(method.longname, method.name);
-                        itemsNav += "</li>";
+						tmpString="";
+                        tmpString += "<li data-type='method'>";
+                        tmpString += linkto(method.longname, method.name);
+                        tmpString += "</li>";
+						if(method.category){
+							if(!methodCategories[method.category]){
+								methodCategories[method.category]=[];
+								methodCategoryOrder.push(method.category);
+							}
+							methodCategories[method.category].push(tmpString);
+						}
+						else{
+							methodCategories.none.push(tmpString);
+						}						
                     });
-
-                    itemsNav += "</ul>";
+					methodCategoryOrder.forEach(function(cat){
+						if(cat=="none"){
+							itemsNav += methodCategories.none.join(' ');
+						}
+						else{
+							itemsNav += '<li>';
+							itemsNav += "<h5>"+cat+"</h5>";
+							itemsNav += "<ul>";
+							itemsNav += methodCategories[cat].join(' ');
+							itemsNav += "</ul>";
+							itemsNav += '</li>';
+						}
+						
+					});
+					itemsNav += "</ul>";
                 }
 
                 itemsNav += '</li>';
@@ -371,16 +435,7 @@ function buildNav(members) {
     var seen = {};
     var seenTutorials = {};
 
-    nav += buildMemberNav(members.classes, 'Classes', seen, linkto);
-    nav += buildMemberNav(members.modules, 'Modules', {}, linkto);
-    nav += buildMemberNav(members.externals, 'Externals', seen, linktoExternal);
-    nav += buildMemberNav(members.events, 'Events', seen, linkto);
-    nav += buildMemberNav(members.namespaces, 'Namespaces', seen, linkto);
-    nav += buildMemberNav(members.mixins, 'Mixins', seen, linkto);
-    nav += buildMemberNav(members.tutorials, 'Tutorials', seenTutorials, linktoTutorial);
-    nav += buildMemberNav(members.interfaces, 'Interfaces', seen, linkto);
-
-    if (members.globals.length) {
+	if (members.globals.length) {
         var globalNav = '';
 
         members.globals.forEach(function(g) {
@@ -398,8 +453,16 @@ function buildNav(members) {
             nav += '<h3>Global</h3><ul>' + globalNav + '</ul>';
         }
     }
-
-    return nav;
+    nav += buildMemberNav(members.classes, 'Classes', seen, linkto);
+    nav += buildMemberNav(members.modules, 'Modules', {}, linkto);
+    nav += buildMemberNav(members.externals, 'Externals', seen, linktoExternal);
+    nav += buildMemberNav(members.events, 'Events', seen, linkto);
+    nav += buildMemberNav(members.namespaces, 'Namespaces', seen, linkto);
+    nav += buildMemberNav(members.mixins, 'Mixins', seen, linkto);
+    nav += buildMemberNav(members.tutorials, 'Tutorials', seenTutorials, linktoTutorial);
+    nav += buildMemberNav(members.interfaces, 'Interfaces', seen, linkto);
+	nav += buildMemberNav(members.reference, 'References', seen, linkto);
+	return nav;
 }
 
 /**
@@ -600,7 +663,7 @@ exports.publish = function(taffyData, opts, tutorials) {
     if (members.globals.length) {
         generate('', 'Global', [{kind: 'globalobj'}], globalUrl);
     }
-
+	
     // index page displays information from package.json and lists files
     var files = find({kind: 'file'});
     var packages = find({kind: 'package'});
@@ -618,9 +681,10 @@ exports.publish = function(taffyData, opts, tutorials) {
     var mixins = taffy(members.mixins);
     var externals = taffy(members.externals);
     var interfaces = taffy(members.interfaces);
+	
 
     Object.keys(helper.longnameToUrl).forEach(function(longname) {
-        var myModules = helper.find(modules, {longname: longname});
+		var myModules = helper.find(modules, {longname: longname});
         if (myModules.length) {
             generate('Module', myModules[0].name, myModules, helper.longnameToUrl[longname]);
         }
